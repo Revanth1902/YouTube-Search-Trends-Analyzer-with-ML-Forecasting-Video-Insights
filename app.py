@@ -12,7 +12,7 @@ import base64
 st.set_page_config(page_title="YouTube Search Trends Analyzer", layout="wide")
 st.title("📺 YouTube Search Trends Analyzer with ML Forecasting & Video Insights")
 
-API_KEY = "AIzaSyDnWkgu1dVleOPAfw1urFfv1k7PLb7IKWc"  # Replace with your YouTube API Key
+API_KEY = "AIzaSyDImruvkaihoQmbVBPbUyX9_MQxD9OsORo"  # Replace with your YouTube API Key
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
 keywords_input = st.text_input("🔑 Enter keyword(s) separated by commas (e.g. AI, Python)", "AI")
