@@ -12,7 +12,9 @@ from textblob import TextBlob
 st.set_page_config(page_title="YouTube Analyzer", layout="wide")
 st.title("📺 YouTube Trends Analyzer with Forecast & Sentiment")
 
-API_KEY = "AIzaSyDnWkgu1dVleOPAfw1urFfv1k7PLb7IKWc"
+
+API_KEY = "2c0be5de338f3bbc03ba4d801e60bcbf772637b3"  # Replace with your YouTube API Key
+
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
 keywords_input = st.text_input("🔑 Enter keyword(s) separated by commas (e.g. AI, Python)", "AI")
