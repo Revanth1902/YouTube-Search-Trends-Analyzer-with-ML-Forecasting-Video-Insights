@@ -5,3 +5,4 @@ matplotlib
 prophet
 scikit-learn
 google-api-python-client
+textblob
