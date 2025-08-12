@@ -6,3 +6,4 @@ prophet
 scikit-learn
 google-api-python-client
 textblob
+dotenv
