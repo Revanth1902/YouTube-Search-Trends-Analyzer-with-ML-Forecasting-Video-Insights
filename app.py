@@ -7,13 +7,13 @@ from googleapiclient.discovery import build
 from sklearn.linear_model import LinearRegression
 from datetime import datetime, timedelta
 from textblob import TextBlob
+from dotenv import load_dotenv
 
-# --- STREAMLIT SETUP ---
 st.set_page_config(page_title="YouTube Analyzer", layout="wide")
 st.title("📺 YouTube Trends Analyzer with Forecast & Sentiment")
 
-
-API_KEY = "2c0be5de338f3bbc03ba4d801e60bcbf772637b3"  # Replace with your YouTube API Key
+load_dotenv()
+API_KEY = os.getenv('API_KEY')
 
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
@@ -21,7 +21,7 @@ keywords_input = st.text_input("🔑 Enter keyword(s) separated by commas (e.g. 
 keywords = [kw.strip() for kw in keywords_input.split(",") if kw.strip()]
 
 
-# --- FUNCTIONS ---
+
 def get_video_data(keyword, max_results=100):
     videos = []
     next_token = None
