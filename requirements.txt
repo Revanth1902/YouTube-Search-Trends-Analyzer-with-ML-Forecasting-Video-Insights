@@ -7,3 +7,5 @@ scikit-learn
 google-api-python-client
 textblob
 dotenv
+os
+tensorflow

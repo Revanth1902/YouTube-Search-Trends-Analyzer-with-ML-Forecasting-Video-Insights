@@ -5,22 +5,111 @@ import matplotlib.pyplot as plt
 from prophet import Prophet
 from googleapiclient.discovery import build
 from sklearn.linear_model import LinearRegression
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime, timedelta
 from textblob import TextBlob
 from dotenv import load_dotenv
+import os
 
-st.set_page_config(page_title="YouTube Analyzer", layout="wide")
-st.title("📺 YouTube Trends Analyzer with Forecast & Sentiment")
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="YouTube Analyzer",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
+# --- CUSTOM CSS FOR STYLING ---
+st.markdown("""
+<style>
+    /* General Styles */
+    body {
+        background-color: #ee6c4d;
+        color: #FAFAFA;
+    }
+    .stApp {
+        background: url("https://www.transparenttextures.com/patterns/dark-matter.png");
+    }
+    .stTextInput > div > div > input {
+        background-color: #1C2128;
+        color: #FAFAFA;
+        border-radius: 10px;
+    }
+    .stButton > button {
+        background-color: #007BFF;
+        color: white;
+        border-radius: 10px;
+        transition: all 0.2s ease-in-out;
+    }
+    .stButton > button:hover {
+        background-color: #0056b3;
+        transform: scale(1.05);
+    }
+    /* Card Styles */
+    .card {
+        background-color: #161B22;
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid #30363D;
+        transition: all 0.2s ease-in-out;
+        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+    }
+            /* On hover, change background to blue and text to white */
+button[data-baseweb="tab"]:hover {
+    background-color: #007BFF; /* Blue color on hover */
+    color: white;
+}
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        color: #58A6FF;
+    }
+            p{
+            color:black}
+    /* Animation */
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    .reportview-container .main .block-container {
+        animation: fadeIn 1s;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- HEADER ---
+st.image("https://upload.wikimedia.org/wikipedia/commons/4/42/YouTube_icon_%282013-2017%29.png", width=100)
+st.title("YouTube Trends Analyzer")
+
+st.markdown("### Forecasts, Sentiment Analysis, Fake News Detection & Recommendations")
+
+# --- API AND KEYWORD INPUT ---
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
-
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
-keywords_input = st.text_input("🔑 Enter keyword(s) separated by commas (e.g. AI, Python)", "AI")
+keywords_input = st.text_input(
+    "🔑 Enter keyword(s) separated by commas (e.g. AI, Python)",
+    "AI",
+    help="Enter multiple keywords to analyze them side-by-side"
+)
 keywords = [kw.strip() for kw in keywords_input.split(",") if kw.strip()]
 
+# --- CONSTANTS ---
+SUSPICIOUS_KEYWORDS = [
+    "fake", "hoax", "false", "misleading", "scam", "untrue", "debunked", "conspiracy",
+    "fraud", "clickbait", "bogus", "fabricated", "manipulated", "falsified", "counterfeit",
+    "phony", "deceptive", "disinformation", "propaganda", "myth", "misinformation",
+    "lies", "exposed", "disproved", "rumor", "rumour", "deceit", "scandal", "alleged",
+    "fake news", "false claim", "deepfake", "fabrication", "sensationalism"
+]
 
+# --- FUNCTIONS ---
+def contains_fake_news_text(text):
+    text_lower = text.lower()
+    return any(word in text_lower for word in SUSPICIOUS_KEYWORDS)
 
 def get_video_data(keyword, max_results=100):
     videos = []
@@ -36,13 +125,17 @@ def get_video_data(keyword, max_results=100):
         for item in video_details["items"]:
             stats = item["statistics"]
             snippet = item["snippet"]
+            title = snippet["title"]
+            description = snippet.get("description", "")[:150]
+            fake_news_flag = contains_fake_news_text(title) or contains_fake_news_text(description)
             videos.append({
                 "video_id": item["id"],
-                "title": snippet["title"],
-                "description": snippet.get("description", "")[:150],
+                "title": title,
+                "description": description,
                 "published_at": pd.to_datetime(snippet["publishedAt"]).date(),
                 "thumbnail": snippet["thumbnails"]["high"]["url"],
-                "views": int(stats.get("viewCount", 0))
+                "views": int(stats.get("viewCount", 0)),
+                "fake_news": fake_news_flag
             })
         next_token = search.get("nextPageToken")
         if not next_token:
@@ -75,12 +168,9 @@ def get_comments(video_id, max_comments=50):
     comments = []
     try:
         req = youtube.commentThreads().list(part="snippet", videoId=video_id,
-                                            maxResults=100, textFormat="plainText").execute()
+                                            maxResults=max_comments, textFormat="plainText").execute()
         for item in req.get("items", []):
-            text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
-            comments.append(text)
-            if len(comments) >= max_comments:
-                break
+            comments.append(item["snippet"]["topLevelComment"]["snippet"]["textDisplay"])
     except:
         pass
     return comments
@@ -89,44 +179,68 @@ def analyze_sentiment(comments):
     results = {"Positive": 0, "Neutral": 0, "Negative": 0}
     for c in comments:
         polarity = TextBlob(c).sentiment.polarity
-        if polarity > 0.1:
-            results["Positive"] += 1
-        elif polarity < -0.1:
-            results["Negative"] += 1
-        else:
-            results["Neutral"] += 1
+        if polarity > 0.1: results["Positive"] += 1
+        elif polarity < -0.1: results["Negative"] += 1
+        else: results["Neutral"] += 1
     return results
 
 def display_top_videos(df):
-    
     st.subheader("🎬 Top 3 Recent Videos")
     top = df.sort_values("views", ascending=False).head(3)
-    for _, row in top.iterrows():
-        c1, c2, c3 = st.columns([1, 3, 2])
-        with c1:
-            st.image(row["thumbnail"], width=150)
-        with c2:
-            st.markdown(f"**[{row['title']}](https://www.youtube.com/watch?v={row['video_id']})**")
-            st.caption(row["description"])
-            st.write(f"🗓 Published: {row['published_at']} | 👁 Views: {format_views(row['views'])}")
-        with c3:
-            comments = get_comments(row["video_id"])
-            if not comments:
-                st.info("No comments")
-            else:
-                sentiments = analyze_sentiment(comments)
-                fig, ax = plt.subplots(figsize=(2.5, 2.5))
-                ax.pie(list(sentiments.values()), labels=list(sentiments.keys()),
-                       colors=['green', 'gray', 'red'], autopct='%1.1f%%', startangle=140)
-                ax.axis('equal')
-                st.pyplot(fig)
+    cols = st.columns(3)
+    for i, (_, row) in enumerate(top.iterrows()):
+        with cols[i]:
+            with st.container():
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.image(row["thumbnail"])
+                title_display = f"**<a href='https://www.youtube.com/watch?v={row['video_id']}' style='color:white;text-decoration:none;'>{row['title']}</a>**"
+                if row["fake_news"]:
+                    title_display += " <span style='color:red;'>⚠️ Potential Fake News</span>"
+                st.markdown(title_display, unsafe_allow_html=True)
+                st.caption(row["description"])
+                st.write(f"🗓️ {row['published_at']} | 👁️ {format_views(row['views'])}")
 
+                comments = get_comments(row["video_id"])
+                if comments:
+                    sentiments = analyze_sentiment(comments)
+                    fig, ax = plt.subplots(figsize=(3, 3))
+                    ax.pie(list(sentiments.values()), labels=list(sentiments.keys()),
+                           colors=['#28a745', '#6c757d', '#dc3545'], autopct='%1.1f%%',
+                           startangle=140, textprops={'color':"w"})
+                    ax.axis('equal')
+                    fig.patch.set_facecolor('#161B22')
+                    st.pyplot(fig)
+                else:
+                    st.info("No comments to analyze.")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+def recommend_similar_topics(df, current_keywords, top_n=5):
+    if df.empty: return pd.DataFrame()
+    df["text"] = df["title"] + " " + df["description"]
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=500)
+    tfidf_matrix = vectorizer.fit_transform(df["text"])
+    input_vec = vectorizer.transform([" ".join(current_keywords)])
+    similarities = cosine_similarity(input_vec, tfidf_matrix).flatten()
+    top_indices = similarities.argsort()[::-1]
+    recommended = []
+    for idx in top_indices:
+        title = df.iloc[idx]["title"]
+        if not any(kw.lower() in title.lower() for kw in current_keywords):
+            recommended.append({
+                "title": title,
+                "description": df.iloc[idx]["description"],
+                "video_id": df.iloc[idx]["video_id"],
+                "views": df.iloc[idx]["views"],
+                "thumbnail": df.iloc[idx]["thumbnail"],
+                "similarity": similarities[idx]
+            })
+        if len(recommended) >= top_n: break
+    return pd.DataFrame(recommended)
 
 # --- APP LOGIC ---
 if keywords:
     for kw in keywords:
-        st.markdown(f"---\n### 🔍 Results for: `{kw}`")
-        
+        st.markdown(f"--- \n ### 🔍 Results for: `{kw}`")
         with st.spinner(f"Fetching videos for '{kw}'..."):
             video_df = get_video_data(kw, max_results=100)
 
@@ -134,61 +248,62 @@ if keywords:
             st.warning("No videos found.")
             continue
 
-        display_top_videos(video_df)
+        tab1, tab2, tab3 = st.tabs(["🏆 Top Videos", "📈 Trends & Forecast", "🤝 Recommendations"])
 
-        # Daily view aggregation (only last 7 days)
-        daily_views = video_df.groupby("published_at")["views"].sum().reset_index()
-        daily_views = daily_views.sort_values("published_at", ascending=True)
-        last_7_days = daily_views[daily_views["published_at"] >= (daily_views["published_at"].max() - pd.Timedelta(days=6))]
+        with tab1:
+            display_top_videos(video_df)
 
-        st.subheader("📊 Daily View Trends (Last 7 Days)")
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(last_7_days["published_at"], last_7_days["views"], marker='o', color='dodgerblue')
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Views")
-        ax.set_title("Total Daily Views (Past 7 Days)")
-        ax.grid(True)
-        st.pyplot(fig)
+        with tab2:
+            daily_views = video_df.groupby("published_at")["views"].sum().reset_index()
+            daily_views = daily_views.sort_values("published_at", ascending=True)
 
-        trend = classify_trend(daily_views["views"])
-        st.markdown(f"""<div style='
-    background-color:#f0f8ff;
-    padding: 10px;
-    border-radius: 8px;
-    font-size: 22px;
-    font-weight: bold;
-    text-align: center;
-'>
-📉 Trend Analysis: <code>{trend}</code>
-</div>
-""", unsafe_allow_html=True)
+            trend = classify_trend(daily_views["views"])
+            st.markdown(f"""
+            <div style='background-color:#161B22; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #30363D;'>
+                <h3 style='color:#58A6FF;'>Trend Analysis</h3>
+                <p style='font-size: 24px; font-weight: bold;'>{trend}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
+            st.subheader("📊 Daily View Trends & Forecast")
+            col1, col2 = st.columns(2)
+            with col1:
+                last_7_days = daily_views[daily_views["published_at"] >= (daily_views["published_at"].max() - pd.Timedelta(days=6))]
+                fig, ax = plt.subplots()
+                ax.plot(last_7_days["published_at"], last_7_days["views"], marker='o', color='#007BFF')
+                ax.set_title("Total Daily Views (Past 7 Days)", color='w')
+                ax.set_xlabel("Date", color='w'); ax.set_ylabel("Views", color='w')
+                ax.grid(True, linestyle='--', alpha=0.3)
+                fig.patch.set_facecolor('#161B22'); ax.set_facecolor('#0E1117')
+                plt.xticks(rotation=45, color='w'); plt.yticks(color='w')
+                st.pyplot(fig)
 
-
-
-
-        st.subheader("🔮 View Forecast (Past 7 + Next 7 Days)")
-        with st.spinner("Building forecast model..."):
-            result = forecast_views(daily_views)
-
-        if result:
-            model, forecast = result
-
-            today = datetime.today().date()
-            past_week = forecast[forecast["ds"].dt.date.between(today - timedelta(days=7), today)]
-            future_week = forecast[forecast["ds"].dt.date > today]
-
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            ax2.plot(past_week["ds"], past_week["yhat"], label="📊 Past 7 Days (Estimated)", color="skyblue")
-            ax2.plot(future_week["ds"], future_week["yhat"], label="🔮 Next 7 Days (Forecast)", color="orange")
-            ax2.fill_between(future_week["ds"], future_week["yhat_lower"], future_week["yhat_upper"],
-                             color="orange", alpha=0.2)
-            ax2.legend()
-            ax2.set_title("Prophet Forecast - Past 7 & Future 7 Days")
-            ax2.set_xlabel("Date")
-            ax2.set_ylabel("Views")
-            st.pyplot(fig2)
-        else:
-            st.warning("Not enough data to build a reliable forecast.")
+            with col2:
+                result = forecast_views(daily_views)
+                if result:
+                    model, forecast = result
+                    fig2 = model.plot(forecast)
+                    fig2.gca().set_title("Prophet Forecast", color='w')
+                    fig2.gca().set_xlabel("Date", color='w'); fig2.gca().set_ylabel("Views", color='w')
+                    fig2.patch.set_facecolor('#161B22'); ax.set_facecolor('#0E1117')
+                    plt.xticks(color='w'); plt.yticks(color='w')
+                    st.pyplot(fig2)
+                else:
+                    st.warning("Not enough data to build a reliable forecast.")
+        with tab3:
+            st.subheader("🤝 Recommended Similar Videos")
+            recs_df = recommend_similar_topics(video_df, [kw], top_n=5)
+            if recs_df.empty:
+                st.info("No recommendations available.")
+            else:
+                for _, rec in recs_df.iterrows():
+                    st.markdown('<div class="card" style="margin-bottom: 10px;">', unsafe_allow_html=True)
+                    c1, c2 = st.columns([1, 4])
+                    with c1: st.image(rec["thumbnail"])
+                    with c2:
+                        st.markdown(f"**<a href='https://www.youtube.com/watch?v={rec['video_id']}' style='color:white;text-decoration:none;'>{rec['title']}</a>**", unsafe_allow_html=True)
+                        st.caption(rec["description"])
+                        st.write(f"👁️ Views: {format_views(rec['views'])}")
+                    st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("Please enter a keyword to begin.")
+    st.info("👋 Welcome! Please enter a keyword above to begin your analysis.")
