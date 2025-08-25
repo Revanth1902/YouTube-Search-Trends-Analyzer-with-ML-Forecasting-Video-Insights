@@ -11,6 +11,12 @@ from datetime import datetime, timedelta
 from textblob import TextBlob
 from dotenv import load_dotenv
 import os
+import tensorflow as tf
+import tensorflow_hub as hub
+from PIL import Image
+import requests
+from io import BytesIO
+import re # Import regular expressions for parsing
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -20,6 +26,7 @@ st.set_page_config(
 )
 
 # --- CUSTOM CSS FOR STYLING ---
+# (Your CSS remains the same)
 st.markdown("""
 <style>
     /* General Styles */
@@ -79,10 +86,10 @@ button[data-baseweb="tab"]:hover {
 </style>
 """, unsafe_allow_html=True)
 
+
 # --- HEADER ---
 st.image("https://upload.wikimedia.org/wikipedia/commons/4/42/YouTube_icon_%282013-2017%29.png", width=100)
 st.title("YouTube Trends Analyzer")
-
 st.markdown("### Forecasts, Sentiment Analysis, Fake News Detection & Recommendations")
 
 # --- API AND KEYWORD INPUT ---
@@ -106,11 +113,72 @@ SUSPICIOUS_KEYWORDS = [
     "fake news", "false claim", "deepfake", "fabrication", "sensationalism"
 ]
 
+# --- OBJECT DETECTION MODEL & LABELS ---
+@st.cache(allow_output_mutation=True)
+def load_model():
+    model_url = "https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2"
+    model = hub.load(model_url)
+    return model
+
+@st.cache
+def get_coco_labels():
+    """Downloads and parses the official COCO label map in a robust way."""
+    url = "https://raw.githubusercontent.com/tensorflow/models/master/research/object_detection/data/mscoco_label_map.pbtxt"
+    try:
+        response = requests.get(url)
+        response.raise_for_status() # Raise an exception for bad status codes
+        
+        labels = {}
+        current_id = None
+        
+        # Iterate through the lines to find ID and display_name pairs
+        for line in response.text.splitlines():
+            if 'id:' in line:
+                current_id = int(line.split(':')[1].strip())
+            elif 'display_name:' in line and current_id is not None:
+                display_name = line.split(':')[1].strip().replace('"', '')
+                labels[current_id] = display_name
+                current_id = None # Reset for the next item block
+        
+        if not labels:
+             st.error("Failed to parse COCO labels. Object detection may not work.")
+        return labels
+    except requests.exceptions.RequestException as e:
+        st.error(f"Could not download COCO labels: {e}")
+        return {} # Return empty dict on failure
+detector = load_model()
+COCO_LABELS = get_coco_labels()
+
+
 # --- FUNCTIONS ---
 def contains_fake_news_text(text):
     text_lower = text.lower()
     return any(word in text_lower for word in SUSPICIOUS_KEYWORDS)
 
+def detect_objects(image_url):
+    try:
+        response = requests.get(image_url)
+        image = Image.open(BytesIO(response.content))
+        image_np = np.array(image)
+        input_tensor = tf.convert_to_tensor(image_np)
+        input_tensor = input_tensor[tf.newaxis, ...]
+
+        detector_output = detector(input_tensor)
+        
+        detection_scores = detector_output['detection_scores'][0].numpy()
+        detection_classes = detector_output['detection_classes'][0].numpy().astype(np.int64)
+        
+        detected_objects = []
+        for i in range(len(detection_scores)):
+            if detection_scores[i] > 0.5: # Confidence threshold
+                class_id = detection_classes[i]
+                class_name = COCO_LABELS.get(class_id, "Unknown")
+                detected_objects.append(f"{class_name.capitalize()} ({detection_scores[i]:.0%})")
+        return detected_objects
+    except Exception as e:
+        return [f"Error detecting objects: {e}"]
+
+# (The rest of your functions: get_video_data, classify_trend, etc. remain the same)
 def get_video_data(keyword, max_results=100):
     videos = []
     next_token = None
@@ -193,6 +261,15 @@ def display_top_videos(df):
             with st.container():
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.image(row["thumbnail"])
+                
+                # Object Detection
+                with st.spinner("Detecting objects..."):
+                    detected_objects = detect_objects(row["thumbnail"])
+                if detected_objects:
+                    st.write("🖼️ **Thumbnail Objects:** ", ", ".join(detected_objects))
+                else:
+                    st.info("No objects detected in thumbnail.")
+
                 title_display = f"**<a href='https://www.youtube.com/watch?v={row['video_id']}' style='color:white;text-decoration:none;'>{row['title']}</a>**"
                 if row["fake_news"]:
                     title_display += " <span style='color:red;'>⚠️ Potential Fake News</span>"
@@ -238,6 +315,7 @@ def recommend_similar_topics(df, current_keywords, top_n=5):
     return pd.DataFrame(recommended)
 
 # --- APP LOGIC ---
+# (Your main App Logic remains the same)
 if keywords:
     for kw in keywords:
         st.markdown(f"--- \n ### 🔍 Results for: `{kw}`")
@@ -299,7 +377,15 @@ if keywords:
                 for _, rec in recs_df.iterrows():
                     st.markdown('<div class="card" style="margin-bottom: 10px;">', unsafe_allow_html=True)
                     c1, c2 = st.columns([1, 4])
-                    with c1: st.image(rec["thumbnail"])
+                    with c1: 
+                        st.image(rec["thumbnail"])
+                        # Object Detection
+                        with st.spinner("Detecting objects..."):
+                           detected_objects = detect_objects(rec["thumbnail"])
+                        if detected_objects:
+                           st.write("🖼️ **Objects:** ", ", ".join(detected_objects))
+                        else:
+                           st.info("No objects detected.")
                     with c2:
                         st.markdown(f"**<a href='https://www.youtube.com/watch?v={rec['video_id']}' style='color:white;text-decoration:none;'>{rec['title']}</a>**", unsafe_allow_html=True)
                         st.caption(rec["description"])
