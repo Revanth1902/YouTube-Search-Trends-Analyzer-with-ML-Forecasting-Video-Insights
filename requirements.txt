@@ -1,10 +1,9 @@
 streamlit
-pandas==1.5.3
-numpy==1.23.5
-matplotlib==3.7.3
-prophet==1.0.1
-cmdstanpy==0.9.5
-scikit-learn==1.2.2
+pandas
+numpy
+matplotlib
+prophet==1.1.5
+scikit-learn
 google-api-python-client
 textblob
 python-dotenv
