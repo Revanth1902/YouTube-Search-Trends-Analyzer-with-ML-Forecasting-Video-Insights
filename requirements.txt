@@ -8,3 +8,6 @@ google-api-python-client
 textblob
 python-dotenv
 tensorflow
+opencv-python 
+tensorflow
+tensorflow_hub
