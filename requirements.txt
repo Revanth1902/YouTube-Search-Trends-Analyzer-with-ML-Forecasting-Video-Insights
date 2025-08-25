@@ -1,28 +1,15 @@
-# --- Core App & UI ---
-streamlit==1.31.1
-
-# --- Data & ML ---
-pandas==2.0.3
-numpy==1.24.4
-scikit-learn==1.3.2
-
-# --- Plotting ---
-matplotlib==3.7.2
-
-# --- Time Series Forecasting ---
-prophet==1.1.5
-cmdstanpy==1.2.0
-
-# --- Google API & NLP ---
-google-api-python-client==2.108.0
-textblob==0.17.1
-
-# --- TensorFlow & Hub (CRITICAL) ---
-# Use versions known to be stable with Python 3.10
-tensorflow==2.15.0
-tensorflow_hub==0.16.1
-
-# --- Image Processing & Utils ---
-Pillow==10.1.0
-requests==2.31.0
-python-dotenv==1.0.0
+streamlit
+pandas==1.5.3
+numpy==1.23.5
+matplotlib==3.7.3
+prophet==1.0.1
+cmdstanpy==0.9.5
+scikit-learn==1.2.2
+google-api-python-client
+textblob
+python-dotenv
+tensorflow==2.14.0
+tensorflow_hub==0.15.0
+opencv-python
+Pillow
+requests
