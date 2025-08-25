@@ -7,8 +7,8 @@ scikit-learn
 google-api-python-client
 textblob
 python-dotenv
-tensorflow
-tensorflow_hub
+tensorflow==2.20.0
+tensorflow-hub==0.16.1
 opencv-python
 Pillow
 requests
