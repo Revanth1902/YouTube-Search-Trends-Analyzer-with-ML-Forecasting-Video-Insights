@@ -8,7 +8,7 @@ google-api-python-client
 textblob
 python-dotenv
 tensorflow==2.14.0
-tensorflow_hub==0.15.0
+tensorflow_hub
 opencv-python
 Pillow
 requests
