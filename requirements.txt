@@ -1,26 +1,15 @@
-# Core Streamlit & Data
 streamlit==1.35.0
 pandas==2.2.2
 numpy==1.26.4
 matplotlib==3.8.4
-
-# Forecasting
-prophet==1.1.5  # Or 'cmdstanpy' if Prophet errors
-cmdstanpy==1.2.0  # Needed for Prophet backend
-
-# ML
+prophet==1.1.5
+cmdstanpy==1.2.0
 scikit-learn==1.4.2
-textblob==0.18.0.post0
-
-# Google API & Env
 google-api-python-client==2.125.0
+textblob==0.18.0.post0
 python-dotenv==1.0.1
-
-# TensorFlow & Vision
 tensorflow==2.14.0
 tensorflow_hub==0.15.0
 opencv-python==4.9.0.80
-
-# For image handling
 Pillow==10.3.0
 requests==2.31.0
