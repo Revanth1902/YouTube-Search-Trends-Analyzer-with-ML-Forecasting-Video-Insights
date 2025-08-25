@@ -2,12 +2,12 @@ streamlit
 pandas
 numpy
 matplotlib
-prophet==1.1.5
+prophet
 scikit-learn
 google-api-python-client
 textblob
 python-dotenv
-tensorflow==2.14.0
+tensorflow
 tensorflow_hub
 opencv-python
 Pillow
